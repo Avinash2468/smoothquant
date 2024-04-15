@@ -10,10 +10,14 @@ import numpy as np
 from tqdm import tqdm
 
 
-def get_act_scales(model, tokenizer, dataset_path, num_samples=512, seq_len=512):
+# modified this
+def get_act_scales(model, processor, prompt, image, num_samples=512, seq_len=512):
+
+    print("ENTERED FUNCTION")
     model.eval()
     device = next(model.parameters()).device
     act_scales = {}
+    print("INITIALIZED EVERYTHING")
 
     def stat_tensor(name, tensor):
         hidden_dim = tensor.shape[-1]
@@ -30,20 +34,16 @@ def get_act_scales(model, tokenizer, dataset_path, num_samples=512, seq_len=512)
         stat_tensor(name, x)
 
     hooks = []
+    print("came till here")
     for name, m in model.named_modules():
         if isinstance(m, nn.Linear):
             hooks.append(
                 m.register_forward_hook(functools.partial(stat_input_hook, name=name))
             )
-
-    dataset = load_dataset("json", data_files=dataset_path, split="train")
-    dataset = dataset.shuffle(seed=42)
-
-    for i in tqdm(range(num_samples)):
-        input_ids = tokenizer(
-            dataset[i]["text"], return_tensors="pt", max_length=seq_len, truncation=True
-        ).input_ids.to(device)
-        model(input_ids)
+            
+    inputs = processor(text=prompt, images=image, return_tensors="pt").to("cuda:0")
+    print(inputs)
+    model(**inputs)
 
     for h in hooks:
         h.remove()
